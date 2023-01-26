@@ -1,0 +1,929 @@
+---
+title: "finalProjectMultipleRegression"
+author: "Ricardo J. Cantarero"
+date: "2022-12-05"
+output: html_document
+---
+#Background Information on Data Set
+
+About Dataset
+Concerns housing values in suburbs of Boston.
+
+Number of Instances: 506
+
+Number of Attributes: 13 continuous attributes (including "class"
+attribute "MEDV"), 1 binary-valued attribute.
+
+Attribute Information:
+
+ // CRIM per capita crime rate by town
+  / ZN proportion of residential land zoned for lots over 25,000 sq.ft.
+  //INDUS proportion of non-retail business acres per town
+  CHAS Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)
+  / NOX nitric oxides concentration (parts per 10 million)
+  / RM average number of rooms per dwelling
+  //AGE proportion of owner-occupied units built prior to 1940
+  //DIS weighted distances to five Boston employment centres
+  //RAD index of accessibility to radial highways
+  / TAX full-value property-tax rate per $10,000
+  //PTRATIO pupil-teacher ratio by town
+  B 1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town
+   /LSTAT % lower status of the population
+  MEDV Median value of owner-occupied homes in $1000's
+  Missing Attribute Values: None.
+  
+#Importation of Data Set 
+```{r}
+realEstateraw <- read.csv("Real_Estate.csv")
+str(realEstateraw)
+library(corrplot, quietly = TRUE)
+library(car, quietly = TRUE)
+library(addAlpha, quietly = TRUE)
+library(RColorBrewer, quietly = TRUE) #This package includes the colorblind friendly colors that we will be using.
+```
+
+
+```{r}
+which(is.na(realEstateraw)) 
+rownames(realEstateraw[is.na(realEstateraw),])
+```
+
+```{r}
+
+realEstate <- na.omit(realEstateraw)
+
+```
+```{r}
+realEstate$LOGLSTAT <- log(realEstate$LSTAT +1)
+realEstate$PTRATIOLOG <- log10(realEstate$PTRATIO +1)
+realEstate$CRIMELOG <- log10(realEstate$CRIM +1)
+```
+```{r}
+realEstateColsansMEDV <- colnames(realEstate)[! colnames(realEstate) %in% c("MEDV")]
+correlationMatrix <- cor(realEstate[, c("MEDV", realEstateColsansMEDV)])
+colnames(correlationMatrix) <- c("MEDV", realEstateColsansMEDV)
+rownames(correlationMatrix) <- c("MEDV", realEstateColsansMEDV)
+divergingColours <- hcl.colors(256, palette = "BrBG")
+
+corrplot(correlationMatrix, 
+         method = "circle",
+         type = "upper", 
+         col = divergingColours, 
+         diag = F,
+         outline = T,
+         tl.col = rgb(0,0,0))
+```
+
+```{r}
+realEstateColsansMEDV <- colnames(realEstate)[! colnames(realEstate) %in% c("MEDV", "CHAS", "CRIM","CRIMELOG",
+                                                                            "TAX","DIS",
+                                                                            "ZN","AGE","NOX","LSTAT",
+                                                                            "B","PTRATIO","RAD","CRIM","INDUS")]
+
+```
+```{r}
+predictorColors <- brewer.pal(8,"Set2")
+
+```
+
+
+#It is time for multiple linear regression, as we are not able to pass assumptions for linear regression for any individual predictor variable.
+```{r fig.width=12, fig.height=7}
+ogVal <- c("RM","PTRATIO","LSTAT","CRIM")
+ogPretty <-c("Averge Number of Rooms Per Dwelling",
+             "Pupil-Teacher Ratio",
+             "Lower Status of Population as Percentage",
+             "Crime Rate Per Capita")
+predVals <- ogVal
+predVals_pretty <- ogPretty
+par(mfcol=c(2,2), omi = c(.3,.75,.3,.3), mai = c(.5,.5,.5,.5))
+
+for( i in (1:length(ogVal)))
+{
+  
+plot(realEstate[,ogVal[i]], realEstate[,'MEDV'],
+     ann= F,
+     axes= F,
+     col = predictorColors[i],
+     lwd = 3.5,
+     ylim = range(pretty(range(realEstate[,'MEDV']))),
+     xlim = range(pretty(range(realEstate[,ogVal[i]]))))
+  
+mtext(predVals_pretty[i], side = 3, las =1, adj = .1, font = 2, col = predictorColors[i], cex = 1)
+axis(2,  at = pretty(range(realEstate[,'MEDV'])), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(realEstate[,'MEDV'])),side = 2,at = pretty(realEstate[,'MEDV']), line = 1, lwd = 1, las = 1)
+if(i == 1 | i == 2){
+mtext("Median Value\nof Owner-Occupied Homes\n($1000 USD)", side =2 , line = 2.75, font = 2)
+}
+axis(1,  at = pretty(range(realEstate[,ogVal[i]])), lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(realEstate[,ogVal[i]])), at = pretty(range(realEstate[,ogVal[i]])),side =1 , line = 1)
+}
+  
+```
+```{r fig.width=12, fig.height=7}
+predVals <-realEstateColsansMEDV
+predVals_pretty <- c("Average Number of\n Rooms per dwelling","Log Percentage of Lower\n Status Of The\n Population","Log Pupil-Teacher\n Ratio By Town")
+par(mfcol=c(2,2), omi = c(.3,.75,.3,.3), mai = c(.5,.5,.5,.5))
+for( i in (1:length(realEstateColsansMEDV)))
+{
+  
+plot(realEstate[,realEstateColsansMEDV[i]], realEstate[,'MEDV'],
+     ann= F,
+     axes= F,
+     col = predictorColors[i],
+     lwd = 3.5,
+     ylim = range(pretty(range(realEstate[,'MEDV']))),
+     xlim = range(pretty(range(realEstate[,realEstateColsansMEDV[i]]))))
+  
+mtext(predVals_pretty[i], side = 3, las =1, adj = .1, font = 2, col = predictorColors[i], cex = 1)
+axis(2,  at = pretty(range(realEstate[,'MEDV'])), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(realEstate[,'MEDV'])),side = 2,at = pretty(realEstate[,'MEDV']), line = 1, lwd = 1, las = 1)
+if(i == 1 | i == 2){
+mtext("Median Value\nof Owner-Occupied Homes\n($1000 USD)", side =2 , line = 2.75, font = 2)
+}
+axis(1,  at = pretty(range(realEstate[,realEstateColsansMEDV[i]])), lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(realEstate[,realEstateColsansMEDV[i]])), at = pretty(range(realEstate[,realEstateColsansMEDV[i]])),side =1 , line = 1)
+}
+  
+plot(realEstate[,'CRIMELOG'], realEstate[,'MEDV'],
+     ann= F,
+     axes= F,
+     col = predictorColors[4],
+     lwd = 3.5,
+     ylim = range(pretty(range(realEstate[,'MEDV']))),
+     xlim = range(pretty(range(realEstate[,'CRIMELOG']))))
+  
+mtext("Log Crime Rate Per Capita", side = 3, las =1, adj = .1, font = 2, col = predictorColors[4], cex = 1)
+axis(2,  at = pretty(range(realEstate[,'MEDV'])), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(realEstate[,'MEDV'])),side = 2,at = pretty(realEstate[,'MEDV']), line = 1, lwd = 1, las = 1)
+
+axis(1, at = pretty(range(realEstate[,'CRIMELOG'])) , lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(realEstate[,"CRIMELOG"])), at = pretty(range(realEstate[,'CRIMELOG'])),side =1 , line = 1)
+```
+
+```{r fig.width=10, fig.height=7, fig.cap="Original Model Predictor Variables"}
+predVals <-realEstateColsansMEDV
+predVals_pretty <- c("Average Number of\n Rooms per dwelling","Log Percentage of Lower\n Status Of The\n Population","Log Pupil-Teacher\n Ratio By Town")
+
+par(mfcol = c(1,length(predVals)), mai = c(.1,.5,.1,.5), omi = c(.25,.25,.25,.25))
+for (i in 1:length(predVals)){
+  if (i != 1 & i < length(predVals)){
+    yLim <- range(pretty(range(log(realEstate[, predVals[i]]+1))))
+    boxplot(log(realEstate[, predVals[i]]+1), axes = FALSE, ylim = yLim, col = rgb(1,1,1), border = predictorColors[i], lwd = 2)
+  } else {
+    yLim <- range(pretty(range(realEstate[, predVals[i]])))
+    boxplot(realEstate[, predVals[i]], axes = FALSE, ylim = yLim, col = rgb(1,1,1), border = predictorColors[i], lwd = 2)
+  }
+  
+  axis(2, at = pretty(yLim), lwd = 2, tck = -.025, labels = FALSE)
+  mtext(pretty(yLim), 2, at = pretty(yLim), line = .75, las = 1)
+  mtext(predVals_pretty[i],3, font=2, cex = .8, line = -1.5)
+}
+```
+
+```{r fig.width=10, fig.height=7, fig.cap="Augmented Model Predictor Variables"}
+predVals <-c(realEstateColsansMEDV, "CRIMELOG")
+predVals_pretty <- c("Average Number of\n Rooms per dwelling","Percentage of Lower\n Status Of The\n Population","Pupil-Teacher\n Ratio By Town", "Log Crime Rate\nPer-Capita")
+
+par(mfcol = c(1,length(predVals)), mai = c(.1,.5,.1,.5), omi = c(.25,.25,.25,.25))
+for (i in 1:length(predVals)){
+  if (i != 1 & i < length(predVals)){
+    yLim <- range(pretty(range(log(realEstate[, predVals[i]]+1))))
+    boxplot(log(realEstate[, predVals[i]]+1), axes = FALSE, ylim = yLim, col = rgb(1,1,1), border = predictorColors[i], lwd = 2)
+  } else {
+    yLim <- range(pretty(range(realEstate[, predVals[i]])))
+    boxplot(realEstate[, predVals[i]], axes = FALSE, ylim = yLim, col = rgb(1,1,1), border = predictorColors[i], lwd = 2)
+  }
+  
+  axis(2, at = pretty(yLim), lwd = 2, tck = -.025, labels = FALSE)
+  mtext(pretty(yLim), 2, at = pretty(yLim), line = .75, las = 1)
+  mtext(predVals_pretty[i],3, font=2, cex = .8, line = -1.5)
+
+}
+  predVals <- c(realEstateColsansMEDV)
+  predVals_pretty <- c("Average Number of\n Rooms per dwelling","Percentage of Lower\n Status Of The\n Population","Pupil-Teacher\n Ratio By Town")
+  
+```
+```{r fig.width=9, fig.height=7}
+predictorColorsT <- add.alpha(predictorColors, .9)
+out76 <- hist(realEstate$MEDV, plot = F)
+
+yticks <- pretty(c(0,out76$count))
+ylimit <- range(yticks)
+hist(realEstate$MEDV, ylim = ylimit, axes = F, ann = F, col =  predictorColorsT[7])
+
+axis(1, at = out76$breaks, lwd =2, tck = -.01, labels = F)
+axis(2, at = yticks, lwd = 2, tck = -.01, labels = F)
+
+mtext(out76$breaks, side = 1, at = out76$breaks, line = .3)
+mtext(yticks , side = 2, at = yticks, line =.3,  las = 1)
+
+
+mtext("Frequency", side = 2, line = 1.75, font = 2)
+
+
+    
+mtext("Median House Value ($1000 USD)", side = 1, line = 1.5, font = 2)
+mtext("Outcome Variable Distribution", col = predictorColors[7], font = 2, adj = -.0001)
+
+```
+
+
+```{r fig.width = 7, fig.height=7}
+correlationMatrix <- cor(realEstate[, c("MEDV", predVals)])
+colnames(correlationMatrix) <- c("MEDV", predVals_pretty)
+rownames(correlationMatrix) <- c("MEDV", predVals_pretty)
+divergingColours <- hcl.colors(256, palette = "Cork")
+
+corrplot(correlationMatrix, 
+         method = "ellipse",
+         type = "upper", 
+         col = divergingColours, 
+         diag = F,
+         outline = T,
+         tl.col = rgb(.4,.4,.4),
+         tl.offset = .5)
+
+
+
+
+```
+
+
+```{r fig.width = 9, fig.height=9}
+par(omi = c(.25,.5,.25,.25))
+correlationMatrix <- cor(realEstate[, c("MEDV", predVals, "CRIMELOG")])
+colnames(correlationMatrix) <- c("Median Value\nof Owner-Occupied Homes\n($1000 USD)", predVals_pretty, "Log Crime Rate\nPer-Capita")
+rownames(correlationMatrix) <- c("Median Value\nof Owner-Occupied Homes\n($1000 USD)", predVals_pretty, "Log Crime Rate\nPer-Capita")
+divergingColours <- hcl.colors(256, palette = "Cork")
+
+corrplot(correlationMatrix, 
+         method = "ellipse",
+         type = "upper", 
+         col = divergingColours, 
+         diag = F,
+         outline = T,
+         tl.col = rgb(.4,.4,.4),
+         tl.offset = .5)
+
+```
+```{r fig.width = 7, fig.height=7}
+
+correlationMatrix <- cor(realEstate[, c("MEDV", predVals, "CRIMELOG")])
+colnames(correlationMatrix) <- c("Median Value\nof Owner-Occupied Homes\n($1000 USD)", predVals_pretty, "Log Crime Rate\nPer-Capita")
+rownames(correlationMatrix) <- c("Median Value\nof Owner-Occupied Homes\n($1000 USD)", predVals_pretty, "Log Crime Rate\nPer-Capita")
+divergingColours <- hcl.colors(256, palette = "Cork")
+
+corrplot(correlationMatrix, 
+         method = "ellipse",
+         type = "upper", 
+         col = divergingColours, 
+         diag = F,
+         outline = T,
+         tl.col = rgb(.4,.4,.4),
+         tl.offset = .5)
+```
+
+```{r}
+set.seed(21)
+trainIDX <- sample(x = c(TRUE, FALSE), size = dim(realEstate)[1], replace = TRUE, prob = c(.75, .25))
+trainingData <- realEstate[trainIDX,]
+testingData <- realEstate[!trainIDX,]
+```
+
+```{r}
+originalModel <- lm(MEDV ~   RM + LOGLSTAT+ PTRATIOLOG, data = trainingData)
+theOutput <- summary(originalModel)
+theOutput
+```
+
+
+```{r fig.width=9, fig.height=7}
+qqCol <- brewer.pal(12, "Paired")
+qqColT <- add.alpha(qqCol)
+
+n <- qqnorm(theOutput$residuals,
+       ann = F,
+       axes = F,
+       col = qqColT[2],
+       lwd = 3.5,
+       xlim = range(pretty(range(-3,3))),
+       ylim = range(pretty(range(theOutput$residuals)))
+       )
+qqline(theOutput$residuals,
+       ann = F,
+      col = qqCol[2],
+      lwd = 3.5
+       )
+mtext("Original Model QQ Plot", side = 3, las =1, adj = .1, font = 2, col = qqCol[1], cex = 1)
+axis(2,  at = pretty(range(n$y)), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(n$y)),side = 2,at = pretty(range(n$y)), line = 1, lwd = 1, las = 1)
+mtext("Sample Quantiles", side =2 , line = 2.75, font = 2)
+
+axis(1,  at = pretty(range(-3,3)), lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(-3,3)), at = pretty(range(-3,3)),side =1 , line = 1)
+mtext("Theoretical Quantiles", side =1 , line = 2.75, font = 2)
+```
+
+
+```{r}
+originalVif <- data.frame(vif(originalModel))
+colnames(originalVif) <- c("VIF Scores")
+rownames(originalVif) <- c("Average Number of Rooms per Dwelling", "Log Percentage of Lower Status", "Pupil-Teacher Ratio")
+```
+
+```{r fig.width = 9, fig.height= 7}
+plot(trainingData$MEDV, theOutput$residuals,
+     ann = F,
+     axes = F,
+     col = qqColT[2],
+     lwd = 4.5,
+     xlim = range(pretty(range(trainingData$MEDV))),
+     ylim = range(pretty(range(theOutput$residuals)))
+     )
+
+mtext("Original Model Homoscedasticity Plot", side = 3, las =1, adj = .1, font = 2, col = qqCol[2], cex = 1)
+axis(2,  at = pretty(range(theOutput$residuals)), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(theOutput$residuals)),side = 2,at = pretty(range(theOutput$residuals)), line = 1, lwd = 1, las = 1)
+mtext("Original Model Residuals", side =2 , line = 2.75, font = 2)
+
+axis(1,  at = pretty(range(trainingData$MEDV)), pos = 0, lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(trainingData$MEDV)), at = pretty(trainingData$MEDV),side =1 , line = -8)
+mtext("Median Value of Owner Occupied Homes ($1000USD)", side = 1, line = -1.0, font = 2)
+```
+#We now repeat process with the extra variable crime
+
+```{r}
+secondModel <- lm(MEDV ~    RM + LOGLSTAT+ PTRATIOLOG + CRIMELOG, data = trainingData)
+theSecondOutput <- summary(secondModel)
+theSecondOutput
+```
+
+
+```{r fig.width = 9, fig.height= 7}
+qqCol <- brewer.pal(12, "Paired")
+
+n <- qqnorm(theSecondOutput$residuals,
+       ann = F,
+       axes = F,
+       col = qqColT[8],
+       lwd = 3.5,
+       xlim = range(pretty(range(-3,3))),
+       ylim = range(pretty(range(theSecondOutput$residuals)))
+       )
+qqline(theSecondOutput$residuals,
+       ann = F,
+      col = qqCol[8],
+      lwd = 3.5
+       )
+mtext("Augmented Model QQ Plot", side = 3, las =1, adj = .1, font = 2, col = qqCol[7], cex = 1)
+axis(2,  at = pretty(range(n$y)), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(n$y)),side = 2,at = pretty(range(n$y)), line = 1, lwd = 1, las = 1)
+mtext("Sample Quantiles", side =2 , line = 2.75, font = 2)
+
+axis(1,  at = pretty(range(-3,3)), lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(-3,3)), at = pretty(range(-3,3)),side =1 , line = 1)
+mtext("Theoretical Quantiles", side =1 , line = 2.75, font = 2)
+```
+
+
+```{r}
+secondVif <- data.frame(vif(secondModel))
+colnames(secondVif) <- c("VIF Scores")
+rownames(secondVif) <- c("Average Number of Rooms per Dwelling", "Log Percentage of Lower Status", "Pupil-Teacher Ratio", "Log of Crime Rate Per Capita")
+```
+
+
+```{r}
+originalVif <- rbind(originalVif, NA)
+rownames(originalVif) <- rownames(secondVif)
+secondVif
+totalVif <- cbind(originalVif, secondVif)
+colnames(totalVif) <- c("Original Model VIF Scores", "Augmented Model VIF Scores")
+```
+
+
+```{r}
+totalVif
+```
+
+```{r fig.width =9, fig.height = 7}
+plot(trainingData$MEDV, theSecondOutput$residuals,
+     ann = F,
+     axes = F,
+     col = qqColT[8],
+     lwd = 4.5,
+     xlim = range(pretty(range(trainingData$MEDV))),
+     ylim = range(pretty(range(theSecondOutput$residuals)))
+     )
+
+mtext("Augmented Model Homoscedasticity Plot", side = 3, las =1, adj = .1, font = 2, col = qqCol[8], cex = 1)
+axis(2,  at = pretty(range(theSecondOutput$residuals)), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(theSecondOutput$residuals)),side = 2,at = pretty(range(theSecondOutput$residuals)), line = 1, lwd = 1, las = 1)
+mtext("Augmented Model Residuals", side =2 , line = 2.75, font = 2)
+
+axis(1,  at = pretty(range(trainingData$MEDV)), pos = 0, lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(trainingData$MEDV)), at = pretty(trainingData$MEDV),side =1 , line = -8)
+mtext("Median Value of Owner Occupied Homes ($1000USD)", side = 1, line = -1.0, font = 2)
+```
+N*lnσ+2k
+```{r fig.width=12, fig.height=7}
+#Must Redo this thing right here with the testing dta and not with the original model
+
+ogYPrediction <- predict(originalModel, newdata = testingData, type = "response")
+sgYPrediction <- predict(secondModel, newdata = testingData, type = "response")
+
+ogSSE <- sum((testingData$MEDV- ogYPrediction)**2)
+sgSSE <- sum((testingData$MEDV - sgYPrediction)**2)
+
+ogSSR <- sum((ogYPrediction - mean(testingData$MEDV))**2)
+sgSSR <- sum((sgYPrediction - mean(testingData$MEDV))**2)
+
+ogR2 <- (ogSSR/(ogSSR + ogSSE))
+sgR2 <- (sgSSR/(sgSSR + sgSSE))
+
+ogAIC <- dim(testingData)[1]*(log(ogSSE/dim(testingData)[1]) + 2*3)
+sgAIC <- dim(testingData)[1]*(log(sgSSE/dim(testingData)[1]) + 2*4)
+```
+
+
+```{r fig.width=12, fig.height=7}
+par(mfrow  = c(1,2))
+
+plot(ogYPrediction, testingData$MEDV,
+     ann=F,
+     axes = F,
+     col = qqColT[2],
+     lwd = 3.5,
+     xlim = range(pretty(range(ogYPrediction))),
+     ylim = range(pretty(range(testingData$MEDV)))
+     )
+
+ogr2text <- ((paste("R^2" ,' = ', signif(ogR2,4))))
+ogAICtext <- paste("AIC = ", signif(ogAIC,));
+
+legend("topright", legend = c(ogr2text,ogAICtext), bty = "n", title.col = qqCol[8] )
+mtext("Original Model Predictions vs Actual", side = 3, las =1, font = 2, col = qqCol[2], cex = 1)
+
+axis(1 , at = pretty(range(ogYPrediction)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(ogYPrediction)),side = 1,at = pretty(range(ogYPrediction)), line = 1, lwd = 1, las = 1)
+mtext("Predicted MEDV Values", side =1 , line = 2.75, font = 2)
+
+
+axis(2 , at = pretty(range(testingData$MEDV)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(testingData$MEDV)),side = 2,at = pretty(range(testingData$MEDV)), line = 1, lwd = 1, las = 1)
+mtext("Actual MEDV Values", side =2 , line = 2.75, font = 2)
+
+plot(sgYPrediction, testingData$MEDV,
+     ann=F,
+     axes = F,
+     col = qqColT[8],
+     lwd = 3.5,
+     xlim = range(pretty(range(sgYPrediction))),
+     ylim = range(pretty(range(testingData$MEDV)))
+     )
+
+sgr2text <- paste("r2, = ",signif(sgR2,4))
+sgAICtext <- paste("AIC = ", signif(sgAIC,4));
+
+legend("topright", legend = c(sgr2text,sgAICtext), bty = "n", title.col = qqCol[8] )
+mtext("Augmented Model Predictions vs Actual", side = 3, las =1, font = 2, col = qqCol[8], cex = 1)
+
+axis(1 , at = pretty(range(sgYPrediction)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(sgYPrediction)),side = 1,at = pretty(range(sgYPrediction)), line = 1, lwd = 1, las = 1)
+mtext("Predicted MEDV Values", side =1 , line = 2.75, font = 2)
+
+
+axis(2 , at = pretty(range(testingData$MEDV)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(testingData$MEDV)),side = 2,at = pretty(range(testingData$MEDV)), line = 1, lwd = 1, las = 1)
+mtext("Actual MEDV Values", side =2 , line = 2.75, font = 2)
+```
+
+Generate New Training Data and Testing Data
+```{r}
+# ogVal 
+# ogPretty 
+set.seed(22)
+trainIDX <- sample(x = c(TRUE, FALSE), size = dim(realEstate)[1], replace = TRUE, prob = c(.75, .25))
+trainingData <- realEstate[trainIDX,]
+testingData <- realEstate[!trainIDX,]
+```
+Create Linear Models
+```{r}
+lstatPM_1 <- lm(trainingData$MEDV ~ trainingData$LSTAT)
+ptratioPM_1 <- lm(trainingData$MEDV ~ trainingData$PTRATIO)
+rmPM_1 <- lm(trainingData$MEDV ~ trainingData$RM)
+crimePM_1 <- lm(trainingData$MEDV ~ trainingData$CRIM)
+
+```
+
+Create Polynomial Models (DEGREE 2)
+```{r}
+
+lstatPM_2 <- lm(trainingData$MEDV ~ poly(trainingData$LSTAT,2))
+ptratioPM_2 <- lm(trainingData$MEDV ~ poly(trainingData$PTRATIO,2))
+rmPM_2 <- lm(trainingData$MEDV ~ poly(trainingData$RM,2))
+crimePM_2 <- lm(trainingData$MEDV ~ poly(trainingData$CRIM,2))
+
+```
+Create Polynomial Models (DEGREE 3)
+```{r}
+lstatPM_3 <- lm(trainingData$MEDV ~ poly(trainingData$LSTAT,3))
+ptratioPM_3 <- lm(trainingData$MEDV ~ poly(trainingData$PTRATIO,3))
+rmPM_3 <- lm(trainingData$MEDV ~ poly(trainingData$RM,3))
+crimePM_3 <- lm(trainingData$MEDV ~ poly(trainingData$CRIM,3))
+
+```
+
+Define MakeQQ Function
+```{r}
+makeqq <- function(theOutput, title_, colNum, supressCol = F, supressRow = F){
+n <- qqnorm(theOutput$residuals,
+       ann = F,
+       axes = F,
+       col = qqColT[colNum],
+       lwd = 3.5,
+       xlim = range(pretty(range(-3,3))),
+       ylim = range(pretty(range(theOutput$residuals)))
+       )
+qqline(theOutput$residuals,
+       ann = F,
+      col = qqCol[colNum],
+      lwd = 3.5
+       )
+mtext(title_, side = 3, las =1, adj = .1, font = 2, col = qqCol[colNum], cex = 1)
+axis(2,  at = pretty(range(n$y)), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(n$y)),side = 2,at = pretty(range(n$y)), line = 1, lwd = 1, las = 1)
+if(!supressCol){
+mtext("Sample Quantiles", side =2 , line = 2.75, font = 2)
+}
+axis(1,  at = pretty(range(-3,3)), lwd = 2, tck = -.0125, labels = F)
+mtext(pretty(range(-3,3)), at = pretty(range(-3,3)),side =1 , line = 1)
+if(!supressRow)
+{
+mtext("Theoretical Quantiles", side =1 , line = 2.75, font = 2)
+}
+
+}
+```
+
+QQ Plots for Linear Models
+```{r fig.width = 10, fig.height=7}
+par(mfcol = c(2,2), omi = c(.5,.5,.5,.5))
+makeqq(lstatPM_1, "QQ Plot for LSTAT\nLinear Model", 1, supressRow = T)
+makeqq(ptratioPM_1, "QQ Plot for Pupil-Teacher Ratio\nLinear Model", 3)
+makeqq(rmPM_1, "QQ Plot for Rooms per Dwelling\nLinear Model", 5, supressCol = T, supressRow = T)
+makeqq(crimePM_1, "QQ Plot for Crime Per Capita\nLinear Model", 7, supressCol = T)
+```
+
+QQ Plots for Quadratic Models
+```{r fig.width = 10, fig.height=7}
+par(mfcol = c(2,2), omi = c(.5,.5,.5,.5))
+makeqq(lstatPM_2, "QQ Plot for LSTAT\nPolynomial Degree 2 Model", 4, supressRow = T)
+makeqq(ptratioPM_2, "QQ Plot for Pupil-Teacher Ratio\nPolynomial Degree 2 Model", 6)
+makeqq(rmPM_2, "QQ Plot for Rooms per Dwelling\nPolynomial Degree 2 Model", 8, supressCol = T, supressRow = T)
+makeqq(crimePM_2, "QQ Plot for Crime Per Capita\nPolynomial Degree 2 Model", 10, supressCol = T)
+```
+
+QQ Plots for Cubic Models
+```{r fig.width = 10, fig.height=7}
+par(mfcol = c(2,2), omi = c(.5,.5,.5,.5))
+
+makeqq(lstatPM_3, "QQ Plot for LSTAT\nPolynomial Degree 3 Model", 5, supressRow = T)
+makeqq(ptratioPM_3, "QQ Plot for Pupil-Teacher Ratio\nPolynomial Degree 3 Model", 9)
+makeqq(rmPM_3, "QQ Plot for Rooms per Dwelling\nPolynomial Degree 3 Model", 7, supressCol = T, supressRow = T)
+makeqq(crimePM_3, "QQ Plot for Crime Per Capita\nPolynomial Degree 3 Model", 1, supressCol = T)
+```
+#From this point, we begin to take the final Multiple Polynomial Regression Models
+
+Make multiple linear/quadratic/cubic models 
+```{r}
+degree_3_original_model <- lm(MEDV ~ poly(LSTAT, 3) + poly(RM, 3) + poly(PTRATIO, 3), data = trainingData)
+degree_2_original_model <- lm(MEDV ~ poly(LSTAT, 2) + poly(RM, 2) + poly(PTRATIO, 2), data = trainingData)
+degree_1_original_model <- lm(MEDV ~ poly(LSTAT, 1) + poly(RM, 1) + poly(PTRATIO, 1), data = trainingData)
+```
+
+
+```{r fig.width=14, fig.height=5}
+par(mfcol = c(1,3), omi = c(.5,.5,.5,.5))
+makeqq(degree_1_original_model,"Original Linear Model QQ Plot" , 2)
+makeqq(degree_2_original_model,"Original Quadratic Model QQ Plot" , 4)
+makeqq(degree_3_original_model,"Original Cubic Model QQ Plot" , 6)
+
+```
+
+Define Homoscedasticity Function
+```{r}
+makehomosced <- function(theSecondOutput,trainingData = trainingData, titleVal, supressCol = F, supressRow = F, evenPow = F, colNum)
+{
+plot(trainingData$MEDV, theSecondOutput$residuals,
+     ann = F,
+     axes = F,
+     col = qqColT[colNum],
+     lwd = 4.5,
+     xlim = range(pretty(range(trainingData$MEDV))),
+     ylim = range(pretty(range(-30,40)))
+     )
+
+mtext(titleVal, side = 3, las =1, adj = .1, font = 2, col = qqCol[colNum], cex = 1)
+axis(2,  at = pretty(range(-30,40)), lwd = 2, tck = -.0125, labels = F) 
+mtext(pretty(range(-30,40)),side = 2,at = pretty(range(-30,40)), line = 1, lwd = 1, las = 1)
+if(!supressCol)
+  mtext("Residuals", side =2 , line = 2.75, font = 2)
+
+axis(1,  at = pretty(range(trainingData$MEDV)), pos = 0, lwd = 2, tck = -.0125, labels = F)
+
+#mtext(pretty(range(trainingData$MEDV)), at = pretty(trainingData$MEDV),side =1 , line = -8)
+  
+if(!supressRow)
+  mtext("Median Value of Owner Occupied Homes ($1000USD)", side = 1, line = 3.0, font = 2)
+}
+```
+
+Homoscedasticity Plots
+```{r fig.width=14, fig.height=5}
+par(mfcol = c(1,3), omi = c(.5,.5,.5,.5))
+
+makehomosced(degree_1_original_model, trainingData, "Original Linear Model\n Homoscedasticity Plot", colNum = 2, supressRow = T)
+makehomosced(degree_2_original_model, trainingData, "Original Quadratic Model\n Homoscedasticity Plot", colNum = 4, supressCol = T)
+makehomosced(degree_3_original_model, trainingData, "Original Cubic Model\n Homoscedasticity Plot", colNum = 6, supressCol = T, supressRow = T )
+```
+
+
+Make Augmented Models
+```{r}
+degree_3_augmented_model <- lm(MEDV ~ poly(LSTAT, 3) + poly(RM, 3) + poly(PTRATIO, 3) + poly(CRIM, 3), data = trainingData)
+degree_2_augmented_model <- lm(MEDV ~ poly(LSTAT, 2) + poly(RM, 2) + poly(PTRATIO, 2) + poly(CRIM, 2), data = trainingData)
+degree_1_augmented_model <- lm(MEDV ~ poly(LSTAT, 1) + poly(RM, 1) + poly(PTRATIO, 1) + poly(CRIM, 1), data = trainingData)
+```
+
+Augmented Model QQ Plots
+```{r fig.width=14, fig.height=5}
+par(mfcol = c(1,3), omi = c(.5,.5,.5,.5))
+makeqq(degree_1_original_model,"Augmented Linear Model\n QQ Plot" , 8)
+makeqq(degree_2_original_model,"Augmented Quadratic Model\n QQ Plot" , 10)
+makeqq(degree_3_original_model,"Augmented Cubic Model\n QQ Plot" , 12)
+
+```
+
+Augmented Homoscedasticity Plots
+```{r fig.width=14, fig.height=5}
+par(mfcol = c(1,3), omi = c(.5,.5,.5,.5))
+
+makehomosced(degree_1_original_model, trainingData, "Augmented Linear Model\n Homoscedasticity Plot", colNum = 8, supressRow = T)
+makehomosced(degree_2_original_model, trainingData, "Augmented Quadratic Model\n Homoscedasticity Plot", colNum = 10, supressCol = T)
+makehomosced(degree_3_original_model, trainingData, "Augmented Cubic Model\n Homoscedasticity Plot", colNum = 12, supressCol = T, supressRow = T )
+```
+
+Linear Model Comparison
+```{r fig.width=12, fig.height=7}
+makePredict <- function(model){
+  
+ return(predict(model, newdata = testingData, type = "response"))
+}
+```
+
+Define getAIC
+```{r fig.width=12, fig.height=7}
+getAIC <- function(ogYPrediction, nParams){
+ogSSE <- sum((testingData$MEDV- ogYPrediction)**2)
+
+ogSSR <- sum((ogYPrediction - mean(testingData$MEDV))**2)
+
+ogR2 <- (ogSSR/(ogSSR + ogSSE))
+
+ogAIC <- dim(testingData)[1]*(log(ogSSE/dim(testingData)[1]) + 2*nParams)
+return(ogAIC)
+}
+```
+
+
+define getR2
+```{r fig.width=12, fig.height=7}
+getR2 <- function(ogYPrediction){
+ogSSE <- sum((testingData$MEDV- ogYPrediction)**2)
+
+ogSSR <- sum((ogYPrediction - mean(testingData$MEDV))**2)
+
+ogR2 <- (ogSSR/(ogSSR + ogSSE))
+
+return(ogR2)
+}
+```
+
+Define Function to get Regression Plots with AIC and R2
+```{r fig.width=12, fig.height=7}
+makeFinalPlot <- function(ogYPrediction, sgYPrediction, colNum1, colNum2,ogR2, ogAIC, sgR2, sgAIC){
+  
+
+plot(ogYPrediction, testingData$MEDV,
+     ann=F,
+     axes = F,
+     col = qqColT[colNum1],
+     lwd = 3.5,
+     xlim = range(pretty(range(ogYPrediction))),
+     ylim = range(pretty(range(testingData$MEDV)))
+     )
+
+ogr2text <- ((paste("R2" ,' = ', signif(ogR2,4))))
+ogAICtext <- paste("AIC = ", signif(ogAIC,));
+
+mtext(ogr2text, adj = -0.025, col = qqCol[colNum1], font = 2)
+mtext(ogAICtext, adj = 0.35, col = qqCol[colNum1], font = 2)
+
+mtext("Original Model Predictions vs Actual", side = 3, las =1, font = 2, col = qqCol[colNum1], cex = 1, line = 1)
+
+axis(1 , at = pretty(range(ogYPrediction)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(ogYPrediction)),side = 1,at = pretty(range(ogYPrediction)), line = 1, lwd = 1, las = 1)
+mtext("Predicted MEDV Values", side =1 , line = 2.75, font = 2)
+
+
+axis(2 , at = pretty(range(testingData$MEDV)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(testingData$MEDV)),side = 2,at = pretty(range(testingData$MEDV)), line = 1, lwd = 1, las = 1)
+mtext("Actual MEDV Values", side =2 , line = 2.75, font = 2)
+
+plot(sgYPrediction, testingData$MEDV,
+     ann=F,
+     axes = F,
+     col = qqColT[colNum2],
+     lwd = 3.5,
+     xlim = range(pretty(range(sgYPrediction))),
+     ylim = range(pretty(range(testingData$MEDV)))
+     )
+
+sgr2text <- paste("R2 = ",signif(sgR2,4))
+sgAICtext <- paste("AIC = ", signif(sgAIC,4));
+
+mtext(sgr2text, adj = -.025, col = qqCol[colNum2], font = 2)
+mtext(sgAICtext, adj = .35, col = qqCol[colNum2], font = 2)
+mtext("Augmented Model Predictions vs Actual", side = 3, las =1, font = 2, col = qqCol[colNum2], cex = 1, line = 1)
+
+axis(1 , at = pretty(range(sgYPrediction)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(sgYPrediction)),side = 1,at = pretty(range(sgYPrediction)), line = 1, lwd = 1, las = 1)
+mtext("Predicted MEDV Values", side =1 , line = 2.75, font = 2)
+
+
+axis(2 , at = pretty(range(testingData$MEDV)), lwd = 2, tck = -.0125, labels= F)
+mtext(pretty(range(testingData$MEDV)),side = 2,at = pretty(range(testingData$MEDV)), line = 1, lwd = 1, las = 1)
+mtext("Actual MEDV Values", side =2 , line = 2.75, font = 2)
+}
+```
+
+We get much better values for R2 and AIC, but a mitigating factor for this slight increase in R2 is that we have clearly failed the assumptions of Homoscedasticity and Normality of Residuals, and not to mention the assumptions of Linearity of the Predictors.
+```{r fig.width=12, fig.height=7}
+par(mfrow  = c(1,2), omi = c(.25,.25,.5,.25))
+og <- makePredict(degree_1_original_model)
+sg <- makePredict(degree_1_augmented_model)
+makeFinalPlot(og,
+             sg,
+              2,
+              4,
+              getR2(og),
+              getAIC(og,
+                     nParams = 3),
+              getR2(sg),
+              getAIC(sg,
+                     nParams = 4))
+mtext("Linear Model Comparison", line = 1, outer = T, font =2)
+
+```
+
+We yield much more appealing values for both our R2 and our AIC with the quadratic regression model, while having met the assumptions for Normality of Residuals and for Homoscedasticity.
+```{r fig.width=12, fig.height=7}
+par(mfrow  = c(1,2), omi = c(.25,.25,.5,.25))
+og <- makePredict(degree_2_original_model)
+sg <- makePredict(degree_2_augmented_model)
+makeFinalPlot(og,
+             sg,
+              6,
+              8,
+              getR2(og),
+              getAIC(og,
+                     nParams = 3),
+              getR2(sg),
+              getAIC(sg,
+                     nParams = 4))
+mtext("Quadratic Regression Model Comparison", line = 1, outer = T, font =2)
+```
+Our cubic model performs better than the linear model, but our AIC scores and R2 scores are no better than those of the quadratic regressions. 
+```{r fig.width=12, fig.height=7}
+par(mfrow  = c(1,2), omi = c(.25,.25,.5,.25))
+og <- makePredict(degree_3_original_model)
+sg <- makePredict(degree_3_augmented_model)
+makeFinalPlot(og,
+             sg,
+              10,
+              12,
+              getR2(og),
+              getAIC(og,
+                     nParams = 3),
+              getR2(sg),
+              getAIC(sg,
+                     nParams = 4))
+mtext("Cubic Regression Model Comparison", line = 1, outer = T, font =2)
+```
+#Below are the Summary Statistics for the Original Linear Regression Model (Data un-transformed)
+
+```{r}
+summary(degree_1_original_model)
+```
+
+#Below are the Summary Statistics for the Augmented Linear Regression Model (Data un-transformed with CRIM)
+```{r}
+summary(degree_1_augmented_model)
+```
+
+
+#Below are the Summary Statistics for the Original Quadratic Regression Model (Data un-transformed)
+```{r}
+summary(degree_2_original_model)
+```
+
+#Below are the Summary Statistics for the Augmented Quadratic Regression Model (Data un-transformed with CRIM)
+```{r}
+summary(degree_2_augmented_model)
+```
+
+#Below are the Summary Statistics for the Original Cubic Regression Model (Data un-transformed)
+```{r}
+summary(degree_3_original_model)
+```
+
+#Below are the Summary Statistics for the Augmented Cubic Regression Model (Data un-transformed with CRIM)
+```{r}
+summary(degree_3_augmented_model)
+```
+
+Here, I have chosen the best model (regarding the R^2 and the AIC), Quadratic Original Model
+```{r}
+cooks_dist_vals <- cooks.distance(degree_2_original_model)
+outlier_vals <- as.integer(names(cooks_dist_vals)[(cooks_dist_vals > mean(cooks_dist_vals))])
+```
+
+We have the row numbers for the outliers, so we will now remove them from the Training Data and rebuild our chosen quadratic models
+```{r}
+trainingData_sans_outliers  <- trainingData[-c(outlier_vals),]
+
+degree_2_original_model_sans_outliers <- lm(MEDV ~ poly(RM, 2) + poly(PTRATIO,2) + poly(LSTAT,2), data = trainingData_sans_outliers)
+degree_2_augmented_model_sans_outliers <- lm(MEDV ~ poly(RM, 2) + poly(PTRATIO,2) + poly(LSTAT,2) + poly(CRIM,2), data = trainingData_sans_outliers)
+```
+
+We will now test the residuals of our quadratic models
+```{r fig.width=12, fig.height=12}
+par(mfrow = c(2,2), omi = c(.5,.5,.5,.5))
+
+makeqq(degree_2_original_model, "Original Multiple\n Quadratic Regression Model", colNum = 09, supressRow = T)
+makeqq(degree_2_original_model_sans_outliers, "Original Multiple\n Quadratic Regression Model\nOutliers Removed", colNum = 10, supressRow = T, supressCol = T)
+
+makeqq(degree_2_augmented_model, "Augmented Multiple\n Quadratic Regression Model", colNum = 07)
+makeqq(degree_2_augmented_model_sans_outliers, "Augmented Multiple\n Quadratic Regression Model\nOutliers Removed", colNum = 08, supressCol = T)
+```
+
+```{r fig.width=12, fig.height=12}
+par(mfrow = c(2,2), omi = c(.5,.5,.5,.5))
+
+makehomosced(degree_2_original_model, trainingData , "Original Multiple\n Quadratic Regression Model", colNum = 09, supressRow = T)
+makehomosced(degree_2_original_model_sans_outliers, trainingData_sans_outliers, "Original Multiple\n Quadratic Regression Model\nOutliers Removed", colNum = 10, supressRow = T, supressCol = T)
+
+makehomosced(degree_2_augmented_model, trainingData, "Augmented Multiple\n Quadratic Regression Model", colNum = 07)
+makehomosced(degree_2_augmented_model_sans_outliers, trainingData_sans_outliers, "Augmented Multiple\n Quadratic Regression Model\nOutliers Removed", colNum = 08, supressCol = T)
+```
+
+Summary Reports
+  We plot with Outliers Included
+```{r fig.width=12, fig.height=8}
+par(mfrow = c(1,2), omi = c(.5,.5,.5,.5))
+ogPredict <- makePredict(degree_2_original_model)
+sgPredict <- makePredict(degree_2_augmented_model)
+
+makeFinalPlot(ogPredict,
+              sgPredict,
+              ogR2 = getR2(ogPredict),
+              ogAIC = getAIC(ogPredict, 3),
+              sgR2 = getR2(sgPredict),
+              sgAIC = getAIC(sgPredict,4),
+              colNum1 = 1,
+              colNum2 = 3)
+mtext("Multiple Quadratic Regression Plot",  outer = T, font = 2, line= 1)
+```
+We plot with Outliers Removed
+
+```{r fig.width=12, fig.height=8}
+
+par(mfrow = c(1,2), omi = c(.5,.5,.5,.5))
+ogPredict <- makePredict(degree_2_original_model_sans_outliers)
+sgPredict <- makePredict(degree_2_augmented_model_sans_outliers)
+
+makeFinalPlot(ogPredict,
+              sgPredict,
+              ogR2 = getR2(ogPredict),
+              ogAIC = getAIC(ogPredict, 3),
+              sgR2 = getR2(sgPredict),
+              sgAIC = getAIC(sgPredict,4),
+              colNum1 = 2,
+              colNum2 = 4)
+mtext("Multiple Quadratic Regression Plot - Outliers Removed", outer = T, font = 2, line = 1)
+
+
+```
+Removal of Outliers makes little difference in Quadratic Regression Model
